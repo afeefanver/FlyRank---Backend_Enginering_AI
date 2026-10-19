@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Header, Depends, Response
+from fastapi.exceptions import RequestValidationError
 import httpx
 
 from supabase import AuthApiError
