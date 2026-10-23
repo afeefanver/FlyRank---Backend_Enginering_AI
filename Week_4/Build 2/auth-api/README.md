@@ -45,3 +45,11 @@ FastAPI serves Swagger at `http://localhost:3000/docs`. Because `get_current_use
 - `.env` is git-ignored, and only `.env.example` is committed.
 - Only the anon key is used.
 - Any verification error is treated as "not allowed" (the guard fails closed).
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| Signup returns `Email address "test@example.com" is invalid` | Supabase rejects reserved domains like `example.com`. Use a real address, e.g. `you+test2@gmail.com`. |
+| Login says `Email not confirmed` | Turn off "Confirm email" in Authentication → Sign In / Providers → Email, or confirm the user manually in Authentication → Users. |
+| Swagger Authorize returns 401 | Paste only the token, without the word `Bearer`. Tokens expire after one hour — log in again. |

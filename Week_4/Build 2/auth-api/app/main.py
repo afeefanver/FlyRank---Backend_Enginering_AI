@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Header, Depends, Response
 from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 import httpx
 
 from supabase import AuthApiError
@@ -25,6 +26,22 @@ app = FastAPI(
     description="Sign up, log in, log out, and token-protected routes (Supabase Auth).",
     lifespan=lifespan,
 )
+
+
+@app.get("/")
+def root():
+    return {
+        "name": "Auth API",
+        "docs": "/docs",
+        "endpoints": [
+            "/auth/signup",
+            "/auth/login",
+            "/auth/logout",
+            "/public/info",
+            "/protected/profile",
+            "/protected/dashboard",
+        ],
+    }
 
 
 @app.exception_handler(ApiError)
