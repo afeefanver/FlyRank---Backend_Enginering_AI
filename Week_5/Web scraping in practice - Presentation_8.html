@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Web scraping in practice · FlyRank</title>
+<style>
+  :root{
+    --bg:#0A2426; --card:#102E2F; --card2:#16393A; --ink:#071A1C;
+    --acc:#6CDD9B; --txt:#F1F1F1; --mut:#9FB8B2;
+    --warn:#F9C74F; --err:#F97066; --blue:#8AB4F8;
+    --side:240px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{background:var(--bg); color:var(--txt); font-family:'Segoe UI',system-ui,-apple-system,sans-serif; overflow:hidden;}
+  .mono{font-family:'Cascadia Code','Fira Code',Consolas,monospace;}
+  button{cursor:pointer; border:none; border-radius:8px; font-weight:700; font-family:inherit;}
+  #app{display:flex; height:100vh;}
+  #side{width:var(--side); min-width:var(--side); background:var(--ink); padding:16px 0; overflow-y:auto; border-right:1px solid var(--card2); transition:margin .25s;}
+  #side.hidden{margin-left:calc(var(--side) * -1);}
+  #side .brand{padding:0 16px 12px; border-bottom:1px solid var(--card2); margin-bottom:10px;}
+  #side .brand .fr{font-size:17px; font-weight:800; color:#fff;}
+  #side .brand .fr span{color:var(--acc);}
+  #side .brand .wk{font-size:10px; color:var(--mut); letter-spacing:.18em; text-transform:uppercase; margin-top:2px;}
+  #side .chap{font-size:9.5px; letter-spacing:.2em; color:var(--acc); text-transform:uppercase; font-weight:700; padding:12px 16px 4px;}
+  #side a{display:block; padding:5px 16px 5px 22px; color:var(--mut); text-decoration:none; font-size:13px; border-left:3px solid transparent; line-height:1.35;}
+  #side a:hover{color:var(--txt); background:var(--card);}
+  #side a.on{color:var(--acc); border-left-color:var(--acc); background:var(--card); font-weight:600;}
+  #main{flex:1; display:flex; flex-direction:column; min-width:0;}
+  #topbar{display:flex; align-items:center; gap:10px; padding:10px 18px; border-bottom:1px solid var(--card2);}
+  #topbar .tb{background:var(--card); color:var(--mut); padding:6px 12px; font-size:12px;}
+  #topbar .tb:hover{color:var(--txt);}
+  #resbtn .cnt{display:inline-block; background:var(--acc); color:var(--ink); border-radius:9px; font-size:10px; font-weight:800; padding:1px 7px; margin-left:6px; vertical-align:1px;}
+  #counter{margin-left:auto; color:var(--mut); font-size:12px;}
+  #progress{height:3px; background:var(--card);}
+  #bar{height:100%; width:0; background:var(--acc); transition:width .25s;}
+  #stage{flex:1; overflow-y:auto; padding:28px 40px;}
+  #notes{display:none; border-top:1px solid var(--card2); background:var(--ink); padding:10px 18px; font-size:12.5px; color:var(--mut); max-height:22vh; overflow-y:auto;}
+  #notes.show{display:block;}
+  #notes b{color:var(--acc);}
+  #navbtns{position:fixed; right:18px; bottom:16px; display:flex; gap:8px; z-index:5;}
+  #navbtns button{background:var(--card2); color:var(--txt); width:40px; height:40px; font-size:16px; border-radius:50%;}
+  #navbtns button:hover{background:var(--acc); color:var(--ink);}
+  .slide{display:none; max-width:1220px; margin:0 auto; animation:fade .25s;}
+  .slide.active{display:block;}
+  @keyframes fade{from{opacity:0; transform:translateY(6px);} to{opacity:1;}}
+  .kick{display:flex; align-items:center; gap:9px; color:var(--acc); font-weight:700; letter-spacing:.24em; font-size:11px; text-transform:uppercase; margin-bottom:8px;}
+  .kick::before{content:""; width:11px; height:11px; background:var(--acc);}
+  h1.st{font-size:clamp(26px,3.4vw,40px); color:#fff; margin-bottom:8px; line-height:1.2;}
+  .sub{color:var(--mut); font-size:16px; margin-bottom:20px;}
+  .cards{display:grid; gap:14px; margin:14px 0;}
+  .c2{grid-template-columns:1fr 1fr;} .c3{grid-template-columns:1fr 1fr 1fr;} .c4{grid-template-columns:repeat(4,1fr);}
+  .card{background:var(--card); border-radius:12px; padding:16px; border:1.5px solid transparent;}
+  .card.hl{border-color:var(--acc);} .card.err{border-color:var(--err);} .card.wrn{border-color:var(--warn);}
+  .card h3{font-size:16px; margin-bottom:6px;}
+  .card h3.g{color:var(--acc);} .card h3.y{color:var(--warn);} .card h3.r{color:var(--err);}
+  .card p{font-size:14.5px; color:var(--txt); line-height:1.5;}
+  .card .cap{color:var(--mut); font-size:13px;}
+  .strip{background:var(--card2); border-radius:10px; padding:12px 16px; font-size:15px; margin:14px 0; line-height:1.55;}
+  .strip b{color:var(--acc);}
+  .strip.warn b{color:var(--warn);}
+  .bl{font-size:15px; color:var(--mut); margin-top:14px; line-height:1.55;}
+  .bl b{color:var(--txt);} .bl .g{color:var(--acc); font-weight:700;}
+  .ink{background:var(--ink); border-radius:10px; padding:14px 16px; font-size:14.5px; line-height:1.7; white-space:pre-wrap;}
+  .ok{color:var(--acc);} .bad{color:var(--err);} .mid{color:var(--warn);} .dim{color:var(--mut);} .blu{color:var(--blue);}
+  .ico{font-size:26px; margin-bottom:6px;}
+  .arrowflow{display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:center; margin:10px 0;}
+  .arrowflow .ar{color:var(--acc); font-size:20px;}
+  .pill{display:inline-block; background:var(--ink); border-radius:6px; padding:3px 9px; font-size:12px; color:var(--txt);}
+  table.tt{border-collapse:collapse; width:100%; font-size:13.5px; margin:10px 0;}
+  table.tt th{background:var(--card2); color:var(--acc); text-align:left; padding:7px 10px; font-size:11.5px;}
+  table.tt td{background:var(--card); padding:7px 10px; border-top:2px solid var(--bg); vertical-align:top;}
+  .dot{display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:6px;}
+  .dg{background:var(--acc);} .dy{background:var(--warn);} .dr{background:var(--err);}
+  .btn{background:var(--acc); color:var(--ink); padding:8px 18px; font-size:13.5px;}
+  .btn.ghost{background:var(--card2); color:var(--txt);}
+  .infobox{background:var(--card2); border-left:4px solid var(--acc); border-radius:8px; padding:12px 14px; min-height:64px; font-size:15px; line-height:1.55;}
+  .infobox b{color:var(--acc);}
+  .q{background:var(--ink); border-radius:10px; padding:16px; margin-bottom:12px;}
+  .q p{margin-bottom:10px; font-size:15px;}
+  .opts{display:flex; gap:10px; flex-wrap:wrap;}
+  .opt{background:var(--card2); color:var(--txt); padding:8px 16px; font-size:14px;}
+  .opt.right{background:var(--acc); color:var(--ink);}
+  .opt.wrong{background:var(--err); color:var(--ink);}
+  .verdict{margin-top:8px; font-size:13.5px; min-height:18px; color:var(--mut);}
+  .score{color:var(--acc); font-weight:700;}
+  .netrow{display:flex; gap:12px; align-items:center; background:var(--card); padding:8px 12px; border-radius:8px; margin-bottom:6px; cursor:pointer; font-size:13.5px; border:1.5px solid transparent; font-family:'Cascadia Code',Consolas,monospace;}
+  .netrow:hover{border-color:var(--card2);}
+  .netrow.sel{border-color:var(--acc);}
+  .netrow .typ{font-size:11px; color:var(--mut); min-width:78px; text-align:right;}
+  .netrow.data .nm{color:var(--acc); font-weight:700;}
+  .netrow.hiddenrow{display:none;}
+  .vgrid{display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start;}
+  .vgrid label{display:block; font-size:12px; color:var(--mut); margin:8px 0 3px;}
+  .vgrid input{width:100%; background:var(--ink); border:1.5px solid var(--card2); border-radius:8px; color:var(--txt); padding:8px 10px; font-size:14px; font-family:'Cascadia Code',Consolas,monospace;}
+  .vgrid input:focus{outline:none; border-color:var(--acc);}
+  #resdrawer{position:fixed; top:0; right:0; height:100%; width:400px; max-width:92vw; background:var(--ink); border-left:1px solid var(--card2); z-index:20; transform:translateX(105%); transition:transform .28s ease; display:flex; flex-direction:column; box-shadow:-12px 0 30px rgba(0,0,0,.35);}
+  #resdrawer.open{transform:translateX(0);}
+  #resdrawer .rhead{display:flex; align-items:center; gap:10px; padding:16px 18px 12px; border-bottom:1px solid var(--card2);}
+  #resdrawer .rhead .rk{color:var(--acc); font-size:10px; letter-spacing:.22em; text-transform:uppercase; font-weight:700;}
+  #resdrawer .rhead .rt{font-size:15px; font-weight:700; color:#fff;}
+  #resdrawer .rhead button{margin-left:auto; background:var(--card2); color:var(--txt); width:30px; height:30px; border-radius:50%; font-size:14px;}
+  #resbody{overflow-y:auto; padding:12px 16px 24px; flex:1;}
+  .ritem{display:block; background:var(--card); border-radius:10px; padding:12px 14px; margin-bottom:10px; text-decoration:none; border:1.5px solid transparent; transition:border-color .15s;}
+  .ritem:hover{border-color:var(--acc);}
+  .ritem .rt1{font-size:14px; font-weight:700; color:var(--txt); margin-bottom:3px;}
+  .ritem .rt1 .ext{color:var(--acc); font-size:11px; margin-left:5px;}
+  .ritem .rm{font-size:12px; color:var(--mut); line-height:1.5;}
+  .rleg{font-size:11.5px; color:var(--mut); padding:0 2px 10px; line-height:1.6;}
+  .rempty{color:var(--mut); font-size:13px; padding:8px 2px;}
+  @media(max-width:860px){ .c3,.c4{grid-template-columns:1fr 1fr;} #side{position:fixed; z-index:9; height:100%;} .vgrid{grid-template-columns:1fr;} }
+</style>
+</head>
+<body>
+<div id="app">
+  <nav id="side"></nav>
+  <div id="main">
+    <div id="topbar">
+      <button class="tb" id="tgSide">☰ Menu</button>
+      <button class="tb" id="tgNotes">Notes (N)</button>
+      <button class="tb" id="tgFull">Fullscreen (F)</button>
+      <button class="tb" id="resbtn">📚 Resources (R)<span class="cnt" id="rescnt">0</span></button>
+      <span id="counter"></span>
+    </div>
+    <div id="progress"><div id="bar"></div></div>
+    <div id="stage"></div>
+    <div id="notes"></div>
+  </div>
+</div>
+<div id="navbtns"><button id="zin">+</button><button id="zout">−</button><button id="prev">←</button><button id="next">→</button></div>
+<div id="resdrawer"><div class="rhead"><div><div class="rk">Resources for this slide</div><div class="rt" id="restitle"></div></div><button id="resclose">✕</button></div><div id="resbody"></div></div>
+
+<script>
+const CH = {A:"The map", B:"Permission first", C:"Find the data", D:"Build the pipeline", E:"Your move"};
+const esc = s => s.replace(/&/g,"&amp;").replace(/</g,"&lt;");
+const slides = [];
+const S = (chapter, nav, kick, title, body, notes) => { slides.push({chapter, nav, kick, title, body, notes}); };
+
+/* ── 1 · Welcome ── */
+S(CH.A, "Welcome", "Backend Development Track · Standalone session", "Web scraping in practice", `
+  <p class="sub">A lecture + 3 demos you can replay yourself · Every language welcome</p>
+  <div class="strip"><b>One machine.</b> Your track so far: a door (the API), a brain (the service), shelves (the database). Today we add the missing box — <b>the intake</b>, where a system goes out and gets its data.</div>
+  <div class="cards c3">
+    <div class="card hl"><div class="ico">💡</div><h3 class="g">Why this topic?</h3><p class="cap">Not because every project scrapes — most never do. Because nothing shows you how the web really works faster: how pages fetch data, how pagination behaves, what status codes mean in practice, what tools like Playwright actually do.</p></div>
+    <div class="card wrn"><div class="ico">⚖️</div><h3 class="y">The grey area, up front</h3><p class="cap">There is no "scraping law" — several rule-books apply at once: a site's terms, copyright, computer-access law, privacy law. Not legal advice; a habit instead: ask "may I?" before "how do I?".</p></div>
+    <div class="card"><div class="ico">🆓</div><h3>Safe to practise</h3><p class="cap">Every target today is a public sandbox, built to be scraped. And everything is free — no credit card, no signup. That is a promise.</p></div>
+  </div>
+  <p class="bl">3 demos run inside these slides — replay them any time from the recording. Keys: <b>← →</b> move · <b>N</b> speaker notes · <b>R</b> resources · <b>F</b> fullscreen · <b>+/−</b> zoom.</p>`,
+  "0:00 → 2:30. Open with the machine picture (door / brain / shelves — today we add the intake), then the WHY-THIS-TOPIC beat: picked not because scraping is essential, but because it is the fastest practical tour of how the web works — data fetching, pagination, status codes, browser tools. Then the grey-area disclaimer with the LinkedIn-case story (courts leaned 'public pages are not hacking', yet the scraper lost on the site's TERMS after ~6 years; privacy law protects even public personal data). Not legal advice. All targets are sandboxes. No agenda slide by design.");
+
+/* ── 2 · A scraper is a client ── */
+S(CH.A, "What a scraper is", "The map", "A scraper is a client", `
+  <div class="cards c2">
+    <div class="card"><div class="ico">🧑‍💻</div><h3>A browser</h3><p class="cap">Asks the server for a page. Shows the answer to a human. Then it forgets.</p></div>
+    <div class="card hl"><div class="ico">🤖</div><h3 class="g">A scraper</h3><p class="cap">Asks the server the same way. Reads the answer with code. Keeps records.</p></div>
+  </div>
+  <div class="strip"><b>The whole web is one loop:</b> a client asks, a server answers. A scraper is one more client in that loop. Not a trick. Not a hack. A client that takes notes.</div>
+  <p class="bl">In the restaurant picture from Week 2: the browser is a customer who eats the meal. The scraper is a customer who <b>writes down the menu</b>. Same door, same waiter, same rules of the house.</p>
+  <p class="bl"><b>Bottom line</b> — <span class="g">a scraper is a polite client that keeps records.</span></p>`,
+  "2:30 → 4:00. Callback to the W2 loop and the restaurant — shared vocabulary, do not re-teach it. For complete beginners this slide IS the definition of scraping. Chat prompt: 'Who has already tried to scrape something? One word: what site?'");
+
+/* ── 3 · The pipeline ── */
+S(CH.A, "The pipeline", "The map", "A scraper is one step, not the job", `
+  <div class="arrowflow">
+    <span class="pill">fetch</span><span class="ar">→</span>
+    <span class="pill">extract</span><span class="ar">→</span>
+    <span class="pill">normalize</span><span class="ar">→</span>
+    <span class="pill">validate</span><span class="ar">→</span>
+    <span class="pill">store</span><span class="ar">→</span>
+    <span class="pill">report</span>
+  </div>
+  <div class="cards c3">
+    <div class="card"><h3>Fetch + Extract</h3><p class="cap">Get the page. Pull out the fields. Most people build these two — and stop.</p></div>
+    <div class="card"><h3>Normalize + Validate</h3><p class="cap">Give every record one clean shape. Reject garbage before you save it.</p></div>
+    <div class="card"><h3>Store + Report</h3><p class="cap">Save without duplicates. Then say out loud what the run did.</p></div>
+  </div>
+  <div class="strip warn"><b>The worst failure is not a crash.</b> It is a job that returns 200 OK every night — and writes zero records. For three weeks. Nobody notices, because nothing "failed". We fix that today.</div>
+  <p class="bl"><b>Bottom line</b> — <span class="g">six small functions in one file. That is the whole "pipeline". Nothing enterprise.</span></p>`,
+  "4:00 → 6:30. This slide is the frame for the whole session — do not rush it. Say the six words out loud. Tease the silent-zero story, promise to return to it. Chat prompt: 'Which of the six do you skip today?' Bet on normalize and report.");
+
+/* ── 4 · Ask before you scrape ── */
+S(CH.B, "Classify the target", "Permission first", "Ask before you scrape", `
+  <table class="tt">
+    <tr><th>Target</th><th>Risk</th><th>What you do</th></tr>
+    <tr><td><span class="dot dg"></span>A practice sandbox, built to be scraped</td><td>Low</td><td>Go. That is what it exists for. Rate limit anyway — you train the habit.</td></tr>
+    <tr><td><span class="dot dy"></span>A public page, no login</td><td>Lower</td><td>Check first. Visible does not mean free to take. Read the terms. Take the minimum.</td></tr>
+    <tr><td><span class="dot dr"></span>Behind a login or a paywall</td><td>High</td><td>Only with an allowed account and explicit approval from somebody senior.</td></tr>
+    <tr><td><span class="dot dr"></span>Personal data — names, photos, employers</td><td>High</td><td>Stop and get advice. Public and unregulated are not the same word.</td></tr>
+    <tr><td><span class="dot dr"></span>You were blocked — 403, challenge, hard limit</td><td>Stop</td><td>The block is the answer. Ask, find an official API, or find another source.</td></tr>
+  </table>
+  <div class="strip"><b>robots.txt</b> is a machine-readable <b>request</b> from a site to robots. It is not a law. It is also not a permission slip. Read it, respect it — and still answer the questions above.</div>
+  <p class="bl"><b>Bottom line</b> — <span class="g">classify the target before you write the parser. It changes what you build.</span></p>`,
+  "6:30 → 9:00. Not legal advice — say so: 'I am an engineer, not a lawyer, and this varies by country.' Top row is today's entire assignment scope. Spend your time on the bottom three rows. The robots.txt strip kills two opposite mistakes at once — name both.");
+
+/* ── 5 · Sorter quiz ── */
+S(CH.B, "Go, check, or stop?", "Permission first · Interactive", "Go, check, or stop?", `
+  <p class="sub">Four real situations. Vote in the chat, then click the answer.</p>
+  <div id="quiz">
+    <div class="q" data-ans="0"><p><b>1.</b> A site advertised as a scraping practice sandbox, with 1000 fake books.</p>
+      <div class="opts"><button class="opt">🟢 Go ahead</button><button class="opt">🟡 Check first</button><button class="opt">🔴 Stop</button></div>
+      <div class="verdict" data-v="Go ahead. It exists for this. Keep volumes small and rate limit anyway — you practise the habit, not just the code."></div></div>
+    <div class="q" data-ans="1"><p><b>2.</b> A public company blog, no login. You want article titles for a personal dashboard.</p>
+      <div class="opts"><button class="opt">🟢 Go ahead</button><button class="opt">🟡 Check first</button><button class="opt">🔴 Stop</button></div>
+      <div class="verdict" data-v="Check first. Public is the easy part. Read the terms, glance at robots.txt, take only what you need. Low risk is not no risk."></div></div>
+    <div class="q" data-ans="2"><p><b>3.</b> A site returns 403 to your script. It works in your browser. You copy the browser headers to get past the block.</p>
+      <div class="opts"><button class="opt">🟢 Go ahead</button><button class="opt">🟡 Check first</button><button class="opt">🔴 Stop</button></div>
+      <div class="verdict" data-v="Stop. The 403 IS the answer. Copying headers to defeat a block is evasion, not engineering. This is how IP ranges get banned."></div></div>
+    <div class="q" data-ans="2"><p><b>4.</b> Public profile pages with people's names, photos and employers. You want to build a dataset.</p>
+      <div class="opts"><button class="opt">🟢 Go ahead</button><button class="opt">🟡 Check first</button><button class="opt">🔴 Stop</button></div>
+      <div class="verdict" data-v="Stop — and get advice. This one catches good engineers. Personal data has its own rules, no matter how visible the page is."></div></div>
+  </div>
+  <p class="bl" id="qscore">Score: <span class="score">0 / 4</span> — click one answer per situation.</p>`,
+  "9:00 → 12:00. Run with the room: read a scenario, take chat votes, then click. Scenario 4 splits rooms — most say 'check first'; slow down on the reveal. Running long? Do 1 and 3 only, tell people the rest are clickable in the recording. After this slide: 'From here on, pure technique.'");
+
+/* ── 6 · Four places data lives ── */
+S(CH.C, "Four places", "Find the data", "One page, four places the data can be", `
+  <div class="cards c4">
+    <div class="card hl"><div class="ico">📄</div><h3 class="g">1 · Initial HTML</h3><p class="cap">The text the server sent. Check with Ctrl+U. If your value is here — you are done. Cheapest and most stable.</p></div>
+    <div class="card"><div class="ico">📦</div><h3>2 · Embedded JSON</h3><p class="cap">A script tag that holds data, not code: ld+json, "var data = [...]", __NEXT_DATA__. Often cleaner than the visible page.</p></div>
+    <div class="card"><div class="ico">🔌</div><h3>3 · The page's own endpoint</h3><p class="cap">The page's JavaScript calls a URL and gets JSON back. Same data, no HTML in the middle.</p></div>
+    <div class="card wrn"><div class="ico">🖥️</div><h3 class="y">4 · Rendered DOM only</h3><p class="cap">The value exists only after JavaScript runs. Now — and only now — you need a real browser.</p></div>
+  </div>
+  <div class="strip warn"><b>Two different documents.</b> Ctrl+U (view source) shows what the server <b>sent</b>. The Elements panel shows the page <b>after JavaScript ran</b>. Write a selector from Elements, run it on the download — it matches nothing, and you lose an hour.</div>
+  <p class="bl"><b>Try this later:</b> open any product page, press Ctrl+U, search for the price. About half the time it sits in a JSON-LD block — already structured, already typed.</p>
+  <p class="bl"><b>Bottom line</b> — <span class="g">the visible page is a rendering layer. Stay as far left in this row as you can.</span></p>`,
+  "12:00 → 15:00. The most practically useful slide of the session. Walk the four cards left to right; left = kilobytes, right = a whole Chromium process. Say the view-source vs Elements distinction TWICE — it is the number one silent time-waster for beginners.");
+
+/* ── 7 · Three questions ── */
+S(CH.C, "The triage", "Find the data", "Ask three questions, in order", `
+  <table class="tt">
+    <tr><th>#</th><th>Question</th><th>How you check</th><th>If yes</th></tr>
+    <tr><td>1</td><td>Is the data in the initial HTML?</td><td>Ctrl+U, then Ctrl+F for a value you can see</td><td>One HTTP request + an HTML parser. Done.</td></tr>
+    <tr><td>2</td><td>Is it in a script tag as JSON?</td><td>Same view-source. Search "ld+json", "var data", "__NEXT_DATA__"</td><td>One HTTP request + JSON.parse. Done.</td></tr>
+    <tr><td>3</td><td>Does the page fetch it from its own endpoint?</td><td>DevTools → Network → Fetch/XHR → reload or scroll</td><td>One HTTP request to that endpoint. Done.</td></tr>
+    <tr><td>—</td><td>All three are no?</td><td>The value appears only after JavaScript paints it</td><td><i>Then</i> a real browser.</td></tr>
+  </table>
+  <div class="strip"><b>The first yes wins.</b> You are not looking for the best answer. You are looking for the cheapest answer that is correct. When a question says yes — stop searching, start building.</div>
+  <p class="bl"><b>Bottom line</b> — <span class="g">option 1 costs a few kilobytes. Option 4 costs a whole browser process, per page.</span></p>`,
+  "15:00 → 17:00. This table is Stage 0 of the practice assignment — say that out loud: 'You will do exactly this on three real pages, with no code. Just Ctrl+U, DevTools, and a text file.' Keep this slide brisk; the next demo shows question 3 live.");
+
+/* ── 8 · Network panel simulator ── */
+S(CH.C, "Watch the network", "Find the data · Interactive", "Find the request behind the page", `
+  <div class="cards c2" style="align-items:start;">
+    <div>
+      <div style="display:flex; gap:8px; margin-bottom:10px;">
+        <button class="btn ghost" id="netAll">All</button>
+        <button class="btn" id="netXhr">Filter: Fetch/XHR</button>
+        <button class="btn ghost" id="netScroll">⬇ Scroll the page</button>
+      </div>
+      <div id="netlist"></div>
+    </div>
+    <div class="infobox" id="netdetail"><b>Click a request row</b> to read it — or press "Filter: Fetch/XHR" to remove the noise first.</div>
+  </div>
+  <p class="bl"><b>Try this later:</b> right-click any request → Copy → <b>Copy as cURL</b>. You get a complete, replayable copy of what the browser did. The most useful button in DevTools.</p>
+  <p class="bl"><b>Bottom line</b> — <span class="g">filter to Fetch/XHR, read one request, scroll, read the next one. The loop obeys has_next.</span></p>`,
+  "17:00 → 20:30. Centrepiece demo. Order: (1) show the raw list, click logo.png — 'noise'; (2) click Filter — six rows collapse to one; (3) click the quotes request, read URL, method, response out loud; (4) press Scroll twice — page=2, page=3 appear; (5) point at has_next. Assignment bridge: 'This is the exact endpoint in Stage 3. You will find it yourself.' Open the Network panel BEFORE you reload — say it, everybody misses it once.");
+
+/* ── 9 · Pagination ── */
+S(CH.C, "Pagination", "Find the data", "Stop when the response says stop", `
+  <div class="cards c3">
+    <div class="card"><h3>Page numbers</h3><p class="cap mono">?page=2</p><p class="cap">Easy. But rows can shift between pages while you read.</p></div>
+    <div class="card"><h3>Offset + limit</h3><p class="cap mono">?skip=20&amp;limit=10</p><p class="cap">Sometimes no "next" field — you compute the end from a total.</p></div>
+    <div class="card"><h3>Cursor</h3><p class="cap mono">?cursor=eyJpZCI6...</p><p class="cap">An opaque string: "continue exactly here". Send it back unchanged. Never build one yourself.</p></div>
+  </div>
+  <div class="strip"><b>One rule covers all three:</b> read the stop signal — has_next, next, has_more, or a missing link — and obey it. Never hard-code a page count. Never invent a cursor.</div>
+  <p class="bl"><b>What guessing costs:</b> you loop to a hard-coded 10 pages. The dataset grows to 14. You now silently lose 40% of it — forever — and every run still says "success".</p>
+  <p class="bl"><b>Bottom line</b> — <span class="g">the response knows when to stop. Your code just has to listen.</span></p>`,
+  "20:30 → 22:30. The hard-coded-page-count story is the one they remember — tell it slowly. Assignment tie: 'There is a checklist box that says: no hard-coded page count anywhere in the code. We will look for it.'");
+
+/* ── 10 · The line ── */
+S(CH.C, "The line", "Find the data", "Seeing a request is not permission to call it", `
+  <div class="cards c2">
+    <div class="card hl"><h3 class="g">A technique ✓</h3><p class="cap">Watching a page use its own endpoint. Reading the response. Repeating that request as an allowed user, on a system that permits automation.</p></div>
+    <div class="card err"><h3 class="r">Not a technique ✕</h3><p class="cap">Bypassing a login. Forging a signature. Replaying somebody else's session token. Defeating a challenge. Calling what the terms put off-limits.</p></div>
+  </div>
+  <div class="strip warn"><b>Tokens are secrets.</b> Never hardcode one. Never paste one in a chat or commit it. If a token lands in Git history — it is leaked. Rotate it immediately. Deleting the commit does not help.</div>
+  <p class="bl">Nothing in this week's practice goes near this line — every target is a public sandbox. You learn the line now, because in six months somebody at work will ask you for something, and <b>you will want to already know where it is</b>.</p>
+  <p class="bl"><b>Bottom line</b> — <span class="g">discovery is a technique. Permission is a separate question — and it is asked first.</span></p>`,
+  "22:30 → 24:30. The ethical core. Say the headline twice. De-escalate at the end — the assignment is 100% sandbox. If running long, keep the two cards and the secrets strip; the rest can compress.");
+
+/* ── 11 · Two ways to scrape ── */
+S(CH.C, "Two ways to scrape", "Find the data", "Two ways to scrape a page", `
+  <div class="cards c2">
+    <div class="card hl"><div class="ico">✉️</div><h3 class="g">Road 1 · Ask for the data</h3><p class="cap">Plain HTTP requests — the road we have used all session: the HTML, the hidden JSON, the endpoint. A few kilobytes and milliseconds per page. Cheap, fast, stable.</p></div>
+    <div class="card wrn"><div class="ico">🖥️</div><h3 class="y">Road 2 · Drive a real browser</h3><p class="cap">Playwright, Puppeteer, Selenium — your code opens an invisible Chrome that runs the page's JavaScript, scrolls and clicks, then reads the result. Hundreds of megabytes per worker, seconds per page, crashed tabs, zombie processes.</p></div>
+  </div>
+  <div class="strip"><b>Take Road 2 only when:</b> the data truly exists only after JavaScript runs (all three triage questions said no) · you need a permitted, logged-in session with real interaction · you are testing a user interface. Otherwise, Road 1 is cheaper and more reliable.</div>
+  <div class="strip warn"><b>Both mistakes are real.</b> "Browser for everything" is the most common expensive habit in this field. But two days of reverse-engineering to avoid a browser you run twice a month is a hobby, not engineering. Choose on purpose. Write down why.</div>
+  <p class="bl">If you do drive one: start with 1–2 workers and measure. Block images, fonts and analytics — one line of configuration, often a 2–3× speed-up. Keep it as <b>one worker inside the pipeline</b>, never the pipeline itself.</p>
+  <p class="bl"><b>Bottom line</b> — <span class="g">both roads are correct at different sizes. Know what each costs, and choose on purpose.</span></p>`,
+  "24:30 → 26:00. The comparison slide — name BOTH roads explicitly; Road 1 is what the whole session has used so far, Road 2 is what tutorials reach for first. Walk the two cards, then the 'only when' strip, then the counterweight. Stretch tie-in: the assignment asks advanced folks to do the same job both ways and MEASURE it. 'That number wins you an argument at work one day.'");
+
+/* ── 12 · The browser tools ── */
+S(CH.C, "The browser tools", "Find the data", "Meet the browser tools", `
+  <div class="cards c3">
+    <div class="card hl"><div class="ico">🎭</div><h3 class="g">Playwright</h3><p class="cap">By Microsoft. The modern default — works with JavaScript, Python, Java and C#, drives Chrome, Firefox and Safari, and waits for pages intelligently so your scripts flake less.</p></div>
+    <div class="card"><div class="ico">🤹</div><h3>Puppeteer</h3><p class="cap">By Google. A JavaScript library that drives Chrome directly. Lighter and Chrome-first — a favourite for screenshots, PDFs and quick automations.</p></div>
+    <div class="card"><div class="ico">🧓</div><h3>Selenium</h3><p class="cap">The veteran, around since 2004. Every language, every browser, and the standard name in QA job listings. A huge ecosystem built around it.</p></div>
+  </div>
+  <div class="strip"><b>One skill, two jobs.</b> These same tools do Road 2 scraping <b>and</b> user-interface testing — opening your own app, clicking through a login, checking the right thing appears. Learn one for scraping and you have also learned a testing tool for your CV.</div>
+  <p class="bl">All three are free and open source. <b>Undecided? Start with Playwright</b> — the docs are excellent and it speaks both lanes of this track. Documentation for all three is in the resources drawer.</p>
+  <p class="bl"><b>Bottom line</b> — <span class="g">same tools, two jobs: scraping JavaScript-only pages, and testing user interfaces.</span></p>`,
+  "26:00 → 27:30. Light slide — one breath per tool, then land on the 'one skill, two jobs' strip: the testing angle is the career hook. Recommendation if asked: Playwright for this track (JS + Python). Do NOT demo here — the stretch task is where they touch these. Resources drawer has all three docs.");
+
+/* ── 12 · Normalize ── */
+S(CH.D, "Normalize", "Build the pipeline", "Raw is what the page said. Clean is what you trust.", `
+  <table class="tt">
+    <tr><th>The page says</th><th>You store</th><th>Why</th></tr>
+    <tr><td class="mono">"£51.77"</td><td class="mono">amount: 51.77, currency: "GBP"</td><td>A database cannot sort a string with a symbol in it.</td></tr>
+    <tr><td class="mono">class="star-rating Three"</td><td class="mono">rating: 3</td><td>There is no digit on the page at all. The rating is a CSS class name.</td></tr>
+    <tr><td class="mono">"In stock (22 available)"</td><td class="mono">in_stock: true, count: 22</td><td>A boolean and a number — and keep the original text too.</td></tr>
+    <tr><td class="mono">href="../a-light..._1000/index.html"</td><td class="mono">canonical_url: "https://..."</td><td>Resolve against the page URL. Never glue strings together.</td></tr>
+  </table>
+  <div class="strip"><b>Keep both.</b> The raw string and the clean value live side by side. When a number looks wrong in three weeks, the raw value is the only thing that can tell you what changed: the page, or your parser.</div>
+  <p class="bl"><b>Bottom line</b> — <span class="g">never let a cleaning step overwrite provenance — the source URL, the time, the method. That is data too.</span></p>`,
+  "27:30 → 30:00. 'The half of the job nobody puts on a CV and everybody needs.' The rating-as-CSS-class row is a real trap in the practice site — flag it. URL resolution: new URL(href, pageUrl) in JS, urljoin in Python. Assignment tie: raw records in Stage 1, clean records in Stage 2, separate files, separate commits.");
+
+/* ── 13 · Validator playground ── */
+S(CH.D, "Validate or quarantine", "Build the pipeline · Interactive", "Validate — or quarantine", `
+  <div class="vgrid">
+    <div>
+      <label>price_text</label><input id="vPrice" value="£51.77">
+      <label>rating_text</label><input id="vRating" value="Three">
+      <label>availability_text</label><input id="vAvail" value="In stock (22 available)">
+      <label>href (from page https://books.toscrape.com/catalogue/page-1.html)</label><input id="vHref" value="a-light-in-the-attic_1000/index.html">
+      <div style="display:flex; gap:8px; margin-top:12px;">
+        <button class="btn" id="vGo">Normalize &amp; validate</button>
+        <button class="btn ghost" id="vBreak">Break something</button>
+        <button class="btn ghost" id="vReset">Reset</button>
+      </div>
+    </div>
+    <div class="ink" id="vOut"><span class="dim">Press "Normalize &amp; validate" to run the record through the schema.</span></div>
+  </div>
+  <p class="bl"><b>Bottom line</b> — <span class="g">one broken row must never cost you the other 999 — and it must never quietly join the good data either.</span></p>`,
+  "30:00 → 33:00. Demo order: (1) Validate — walk the clean record: amount+currency, word→integer, boolean+count, absolute URL. (2) Break something — currency gone, rating becomes '3 stars' — record goes to QUARANTINE with readable reasons, run does not crash. (3) Read the reasons out loud: 'three weeks from now, that message tells you what changed.' Assignment tie: 'You will break your own validator on purpose. A validator you never saw reject anything is decoration.' If early: take a value from chat and type it in live.");
+
+/* ── 15 · Status codes → polite retries ── */
+S(CH.D, "Read the status code", "Build the pipeline", "The status code tells you what to do", `
+  <div class="strip"><b>Every response starts with a number</b> — and that number is the server talking to you. A polite scraper is simply one that listens: it reads the code first, and only then decides whether trying again can possibly help.</div>
+  <table class="tt">
+    <tr><th>Failure</th><th>Retry?</th><th>Why</th></tr>
+    <tr><td>Network timeout (no code)</td><td><span class="ok">Yes</span></td><td>Something hiccupped on the way. The request itself was fine.</td></tr>
+    <tr><td><span class="mid">429</span> Too many requests</td><td><span class="mid">After waiting</span></td><td>The server said "slow down" — so slow down. Obey Retry-After. Careful: it comes as seconds <i>or</i> as a date. Handle both.</td></tr>
+    <tr><td><span class="bad">500 / 503</span> Server error</td><td><span class="ok">Yes, with growing pauses</span></td><td>The server is unwell — not you. Wait 1s, then 2s, then 4s. Give it room to recover.</td></tr>
+    <tr><td><span class="mid">404</span> Not found</td><td><span class="bad">No</span></td><td>It will still be a 404 in ten seconds — and in ten hours.</td></tr>
+    <tr><td><span class="bad">401 / 403</span> Not allowed</td><td><span class="bad">Never</span></td><td>The server told you to stop. Hammering a 403 is how a project gets an IP range banned.</td></tr>
+  </table>
+  <div class="strip"><b>The whole pattern:</b> two kinds of failure mean "try again" · two mean "wait first" · two mean "stop completely". That mapping is the entire politeness of a scraper.</div>
+  <p class="bl"><b>Bottom line</b> — <span class="g">blind retries are worse than no retries. They pile load onto a struggling server and bury the failures that mean something.</span></p>`,
+  "33:00 → 35:30. Callback to Backend 101: 'you memorized these numbers — here they become decisions.' Open with the lazy answer (retry forever = a small attack), then walk the table row by row. Land on 401/403. The Retry-After two-formats detail bites everyone once; Stage 4 meets it. Close on the try/wait/stop pattern strip.");
+
+/* ── 15 · The silent zero ── */
+S(CH.D, "The silent zero", "Build the pipeline", "200 OK does not prove a successful scrape", `
+  <div class="strip warn"><b>The story:</b> a site renames one CSS class. Your selector matches nothing. Every request still returns 200 — the request <i>was</i> fine. Your job writes zero records. Every night. For three weeks. No alarm, because nothing "failed".</div>
+  <div class="cards c4">
+    <div class="card"><h3>Record count</h3><p class="cap">You know roughly what a page should produce. Zero is an incident, not a quiet Tuesday.</p></div>
+    <div class="card"><h3>Missing-field rate</h3><p class="cap">Descriptions on 98% of records last week, 20% today? The layout moved.</p></div>
+    <div class="card"><h3>Schema failures</h3><p class="cap">A spike means the source changed shape. Your validator already knows. Make it say so.</p></div>
+    <div class="card"><h3>Freshness</h3><p class="cap">"Last run" and "last <i>successful</i> run" are two different numbers. Track both.</p></div>
+  </div>
+  <div class="strip"><b>And make the job idempotent</b> — safe to run twice. Merge on a stable ID (a product code, a canonical URL — never a display name). Re-running yesterday must update records, not duplicate them.</div>
+  <p class="bl"><b>Bottom line</b> — <span class="g">the run report is one small JSON file with five fields. It is the entire difference between a script and a system.</span></p>`,
+  "35:30 → 38:00. Never cut this slide. The story from slide 3 pays off here. Ask the room: 'How would you find out?' — pause — most answers are 'somebody complains', which is exactly the point. All four metrics are trivial to compute; say that.");
+
+/* ── 17 · Your move — lecture → assignment map ── */
+S(CH.E, "Your move", "Your move", "Everything today becomes your assignment", `
+  <table class="tt">
+    <tr><th>What we did today</th><th>Where you do it yourself</th></tr>
+    <tr><td>The three-question triage</td><td><b>Stage 0</b> — interrogate three real pages. No code — a browser and a text file.</td></tr>
+    <tr><td>The four places · reading plain HTML</td><td><b>Stage 1</b> — extract 60 books, with provenance on every record.</td></tr>
+    <tr><td>Normalize · validate · quarantine</td><td><b>Stage 2</b> — clean records, and break your own validator on purpose.</td></tr>
+    <tr><td>The Network panel · the stop signal</td><td><b>Stage 3</b> — find the endpoint behind the infinite scroll, collect 100 quotes.</td></tr>
+    <tr><td>Status codes · retries · run twice safely · run report</td><td><b>Stage 4</b> — make it polite, idempotent, and honest.</td></tr>
+    <tr><td>Show your work</td><td><b>Stage 5</b> — a public repo a stranger can run in five minutes.</td></tr>
+    <tr><td>Bonus · the AI rematch</td><td>Describe your build as a prompt, let a model rebuild it in quarantine, and see what your prompt forgot. Free lanes: Ollama locally, or Gemini's free tier — no card.</td></tr>
+  </table>
+  <div class="strip"><b>If you only finish Stage 3, submit anyway.</b> A working half is worth more than a broken whole. And if parts of today felt fast — that is normal. Stage 0 is twenty minutes of clicking, tonight.</div>
+  <p class="bl"><b>The sentence to keep</b> — <span class="g">scrape deterministically, reason semantically, and validate both.</span></p>`,
+  "38:00 → 40:00. The closing slide — walk the table top to bottom, one breath per row: 'you already did this today, now you do it yourself.' The AI rematch row carries the only AI beat of the close — keep it light. Reassurance strip is mandatory. Recording, slides and every link are on the portal. Then questions.");
+
+/* ===== engine ===== */
+let cur = 0;
+const stage = document.getElementById('stage'), side = document.getElementById('side');
+const notesEl = document.getElementById('notes'), bar = document.getElementById('bar'), counter = document.getElementById('counter');
+let lastCh = null, navHtml = "";
+slides.forEach((s, i) => {
+  if (s.chapter !== lastCh) { navHtml += `<div class="chap">${s.chapter}</div>`; lastCh = s.chapter; }
+  navHtml += `<a href="#" data-i="${i}">${i+1} · ${s.nav}</a>`;
+  const d = document.createElement('div');
+  d.className = 'slide'; d.id = 'sl' + i;
+  d.innerHTML = `<div class="kick">${s.kick}</div>` + (s.title ? `<h1 class="st">${s.title}</h1>` : '') + s.body;
+  stage.appendChild(d);
+});
+side.innerHTML = `<div class="brand"><div class="fr">Fl<span>y</span>Rank<sup style="font-size:9px;"> AI</sup></div><div class="wk">Scraping in practice</div></div>` + navHtml;
+
+function show(i) {
+  cur = Math.max(0, Math.min(slides.length - 1, i));
+  document.querySelectorAll('.slide').forEach((el, j) => el.classList.toggle('active', j === cur));
+  document.querySelectorAll('#side a').forEach((a, j) => a.classList.toggle('on', j === cur));
+  bar.style.width = ((cur + 1) / slides.length * 100) + '%';
+  counter.textContent = (cur + 1) + " / " + slides.length;
+  notesEl.innerHTML = "<b>Notes:</b> " + slides[cur].notes;
+  stage.scrollTop = 0;
+  const on = document.querySelector('#side a.on'); if (on) on.scrollIntoView({block:'nearest'});
+  location.hash = cur + 1;
+  renderRes();
+}
+side.addEventListener('click', e => { if (e.target.dataset.i !== undefined) { e.preventDefault(); show(+e.target.dataset.i); } });
+document.getElementById('prev').onclick = () => show(cur - 1);
+document.getElementById('next').onclick = () => show(cur + 1);
+document.getElementById('tgSide').onclick = () => side.classList.toggle('hidden');
+document.getElementById('tgNotes').onclick = () => notesEl.classList.toggle('show');
+document.getElementById('tgFull').onclick = () => document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+
+let zoom = parseFloat(localStorage.getItem('wspzoom')) || 1.15;
+function setZoom(z) { zoom = Math.min(2, Math.max(0.7, Math.round(z * 20) / 20)); stage.style.zoom = zoom; localStorage.setItem('wspzoom', zoom); }
+document.getElementById('zin').onclick = () => setZoom(zoom + 0.1);
+document.getElementById('zout').onclick = () => setZoom(zoom - 0.1);
+setZoom(zoom);
+
+document.addEventListener('keydown', e => {
+  if (['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)) return;
+  if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); show(cur + 1); }
+  else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); show(cur - 1); }
+  else if (e.key === 'Home') show(0);
+  else if (e.key === 'End') show(slides.length - 1);
+  else if (e.key.toLowerCase() === 'n') notesEl.classList.toggle('show');
+  else if (e.key.toLowerCase() === 'f') document.getElementById('tgFull').click();
+  else if (e.key.toLowerCase() === 'r') { renderRes(); drawer.classList.toggle('open'); }
+  else if (e.key === '+' || e.key === '=') setZoom(zoom + 0.1);
+  else if (e.key === '-' || e.key === '_') setZoom(zoom - 0.1);
+  else if (e.key === 'Escape') drawer.classList.remove('open');
+});
+
+/* ===== widget 1 · go/check/stop sorter (slide 5) ===== */
+(function(){
+  const quiz = document.getElementById('quiz');
+  if (!quiz) return;
+  let score = 0, answered = 0;
+  quiz.querySelectorAll('.q').forEach(q => {
+    const ans = +q.dataset.ans;
+    const verdict = q.querySelector('.verdict');
+    const opts = [...q.querySelectorAll('.opt')];
+    opts.forEach((o, i) => {
+      o.onclick = () => {
+        if (q.dataset.done) return;
+        q.dataset.done = "1"; answered++;
+        opts[ans].classList.add('right');
+        if (i !== ans) o.classList.add('wrong'); else score++;
+        verdict.textContent = verdict.dataset.v;
+        document.getElementById('qscore').innerHTML = 'Score: <span class="score">' + score + ' / 4</span>' + (answered === 4 ? ' — done. Every "stop" here has a human path forward: ask, or find an official API.' : '');
+      };
+    });
+  });
+})();
+
+/* ===== widget 2 · network panel simulator (slide 8) ===== */
+(function(){
+  const list = document.getElementById('netlist');
+  if (!list) return;
+  const detail = document.getElementById('netdetail');
+  let page = 1;
+  const rows = [
+    {nm:"scroll/", typ:"document", data:false, d:"<b>The document.</b> The HTML shell the server sent. View-source shows this — and it contains no quotes at all."},
+    {nm:"styles.css", typ:"stylesheet", data:false, d:"<b>A stylesheet.</b> Styling. Noise for extraction."},
+    {nm:"logo.png", typ:"png", data:false, d:"<b>An image.</b> A PNG. Not your data. Noise."},
+    {nm:"jquery.js", typ:"script", data:false, d:"<b>A script.</b> Code, not data. Noise."},
+    {nm:"analytics.js", typ:"script", data:false, d:"<b>Analytics.</b> Somebody else's data problem. Noise."},
+    {nm:"font.woff2", typ:"font", data:false, d:"<b>A font.</b> Noise."},
+    {nm:"api/quotes?page=1", typ:"fetch", data:true, d:"<b>Request URL:</b> quotes.toscrape.com/api/quotes?page=1 · <b>Method:</b> GET<br><b>Response:</b> <span class='mono'>{ \"has_next\": true, \"page\": 1, \"quotes\": [ { \"text\": \"...\", \"author\": { \"name\": \"Albert Einstein\" }, \"tags\": [\"change\"] }, ... ] }</span><br>Clean, structured JSON — better than anything you could scrape out of the rendered page. And note <b>has_next: true</b> — that field is the stop signal your loop obeys."}
+  ];
+  function render(filtered){
+    list.innerHTML = "";
+    rows.forEach((r, idx) => {
+      const el = document.createElement('div');
+      el.className = 'netrow' + (r.data ? ' data' : '') + (filtered && !r.data ? ' hiddenrow' : '');
+      el.innerHTML = '<span class="nm">' + r.nm + '</span><span class="typ" style="margin-left:auto;">' + r.typ + '</span>';
+      el.onclick = () => {
+        list.querySelectorAll('.netrow').forEach(x => x.classList.remove('sel'));
+        el.classList.add('sel');
+        detail.innerHTML = r.d;
+      };
+      list.appendChild(el);
+    });
+  }
+  let filtered = false;
+  document.getElementById('netAll').onclick = e => { filtered = false; styleBtns(); render(false); };
+  document.getElementById('netXhr').onclick = e => { filtered = true; styleBtns(); render(true); detail.innerHTML = "<b>Six rows collapse to one.</b> That is the entire trick. Now click the request that is left."; };
+  function styleBtns(){
+    document.getElementById('netAll').className = 'btn' + (filtered ? ' ghost' : '');
+    document.getElementById('netXhr').className = 'btn' + (filtered ? '' : ' ghost');
+  }
+  document.getElementById('netScroll').onclick = () => {
+    if (page >= 3) { detail.innerHTML = "<b>Page 3 answered has_next: false.</b> The loop stops here — because the response said so, not because you guessed a count."; return; }
+    page++;
+    const last = page === 3;
+    rows.push({nm:"api/quotes?page=" + page, typ:"fetch", data:true,
+      d:"<b>Request URL:</b> quotes.toscrape.com/api/quotes?page=" + page + " · <b>Method:</b> GET<br><b>Response:</b> <span class='mono'>{ \"has_next\": " + (last ? "false" : "true") + ", \"page\": " + page + ", \"quotes\": [ ... ] }</span><br>" + (last ? "<b>has_next is now false.</b> This is the stop signal. Your loop reads it and ends — no page count was ever hard-coded." : "Same endpoint, different number. Infinite scroll is not magic — it is a loop over this request.")});
+    render(filtered);
+    detail.innerHTML = "<b>You scrolled — and a new request appeared:</b> the same endpoint with page=" + page + ". Click it and check has_next.";
+  };
+  render(false);
+})();
+
+/* ===== widget 3 · validator playground (slide 13) ===== */
+(function(){
+  const out = document.getElementById('vOut');
+  if (!out) return;
+  const P = id => document.getElementById(id);
+  const DEF = {vPrice:"£51.77", vRating:"Three", vAvail:"In stock (22 available)", vHref:"a-light-in-the-attic_1000/index.html"};
+  const WORDS = {One:1, Two:2, Three:3, Four:4, Five:5};
+  function run(){
+    const price = P('vPrice').value.trim(), rating = P('vRating').value.trim(), avail = P('vAvail').value.trim(), href = P('vHref').value.trim();
+    const errs = [];
+    let amount = null, currency = null;
+    const m = price.match(/^([£$€])\s*([0-9]+(?:\.[0-9]+)?)$/);
+    if (m) { currency = {"£":"GBP","$":"USD","€":"EUR"}[m[1]]; amount = parseFloat(m[2]); }
+    else errs.push('price: no currency symbol found in "' + price + '" — a bare number is not a price.');
+    const rnum = WORDS[rating];
+    if (!rnum) errs.push('rating: "' + rating + '" is not one of One, Two, Three, Four, Five.');
+    const am = avail.match(/in stock(?:\s*\((\d+) available\))?/i);
+    const inStock = !!am, count = am && am[1] ? +am[1] : null;
+    if (!am) errs.push('availability: "' + avail + '" did not match a known pattern.');
+    let url = null;
+    try { url = new URL(href, "https://books.toscrape.com/catalogue/page-1.html").href; }
+    catch(e){ errs.push('href: could not resolve "' + href + '" to an absolute URL.'); }
+    if (errs.length) {
+      out.innerHTML = '<span class="bad">✕ QUARANTINED — not saved with the good records.</span>\n<span class="dim">The run did not crash. The other 59 records are fine.</span>\n\nReasons:\n' + errs.map(e => '<span class="mid">• ' + esc(e) + '</span>').join('\n');
+    } else {
+      out.innerHTML = '<span class="ok">✓ VALID — saved.</span>\n{\n  "canonical_url": <span class="blu">"' + url + '"</span>,\n  "price": { "amount": <span class="ok">' + amount + '</span>, "currency": "' + currency + '" },\n  "rating": <span class="ok">' + rnum + '</span>,\n  "in_stock": <span class="ok">' + inStock + '</span>' + (count !== null ? ', "count": <span class="ok">' + count + '</span>' : '') + ',\n  "raw": { "price_text": "' + esc(P('vPrice').value) + '", "rating_text": "' + esc(rating) + '" }\n}\n<span class="dim">Raw and clean live side by side. Provenance untouched.</span>';
+    }
+  }
+  P('vGo').onclick = run;
+  P('vBreak').onclick = () => { P('vPrice').value = "51.77"; P('vRating').value = "3 stars"; run(); };
+  P('vReset').onclick = () => { for (const k in DEF) P(k).value = DEF[k]; out.innerHTML = '<span class="dim">Press "Normalize &amp; validate" to run the record through the schema.</span>'; };
+})();
+
+/* ===== resources drawer ===== */
+const RES = {
+  1: [
+    ["g","ToScrape — the practice sandbox","https://toscrape.com/","Site · ~2 min — the two sandboxes today's examples and your practice all use. Built to be scraped."]
+  ],
+  2: [],
+  3: [
+    ["g","Real Python — build a Beautiful Soup scraper","https://realpython.com/beautiful-soup-web-scraper-python/","Tutorial · ~60 min — a full fetch→extract build-along on a stable practice site. The gentlest complete walkthrough there is."]
+  ],
+  4: [
+    ["g","ToScrape — sandbox description","https://toscrape.com/","Site · ~2 min — what a 'built to be scraped' target looks like, so you recognise the opposite."],
+    ["y","RFC 9309 — Robots Exclusion Protocol","https://www.rfc-editor.org/rfc/rfc9309.html","Spec · ~20 min — what robots.txt actually promises, from the source. Shorter and clearer than its reputation."],
+    ["y","hiQ v. LinkedIn — the case, wrapped up","https://www.zwillgen.com/alternative-data/hiq-v-linkedin-wrapped-up-web-scraping-lessons-learned/","Case study · ~10 min — the six-year public-profiles lawsuit: why 'not hacking' still lost on the site's terms. The grey area, in one real story."]
+  ],
+  5: [],
+  6: [
+    ["y","Scrapy — selecting dynamically-loaded content","https://docs.scrapy.org/en/latest/topics/dynamic-content.html","Guide · ~15 min — the best short argument for finding the data source before launching a browser."]
+  ],
+  7: [
+    ["g","Chrome DevTools — inspect network activity","https://developer.chrome.com/docs/devtools/network","Tutorial · ~20 min — the official hands-on walkthrough of the panel you will use in Stage 0 and Stage 3."]
+  ],
+  8: [
+    ["g","Chrome DevTools — inspect network activity","https://developer.chrome.com/docs/devtools/network","Tutorial · ~20 min — do this once with the real panel and this demo becomes muscle memory."],
+    ["y","Copy as curl — everything.curl.dev","https://everything.curl.dev/cmdline/copyas.html","Article · ~5 min — the most useful button in DevTools, explained by the curl book itself."]
+  ],
+  9: [],
+  10: [],
+  11: [
+    ["y","Scrapy — selecting dynamically-loaded content","https://docs.scrapy.org/en/latest/topics/dynamic-content.html","Guide · ~15 min — 'find the data source first' as an official recommendation, not just our opinion."]
+  ],
+  12: [
+    ["g","Playwright — introduction","https://playwright.dev/docs/intro","Docs · ~15 min — the modern default. Excellent docs, works in both lanes of this track. Start here if undecided."],
+    ["y","Puppeteer — official docs","https://pptr.dev/","Docs · ~15 min — Google's Chrome-first library. The classic for screenshots, PDFs and quick automations."],
+    ["y","Selenium — documentation","https://www.selenium.dev/documentation/","Docs · ~20 min — the veteran, every language and browser. The name you will meet in QA job listings."]
+  ],
+  13: [],
+  14: [
+    ["g","Zod — schema validation (JS lane)","https://zod.dev/","Docs · ~15 min — define the record once, validate every page against it. You need parse/safeParse, nothing more today."],
+    ["g","Pydantic — models (Python lane)","https://docs.pydantic.dev/latest/","Docs · ~15 min — same idea for Python. Skim the Models page; that is all Stage 2 needs."]
+  ],
+  15: [
+    ["g","MDN — 429 Too Many Requests","https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status/429","Reference · ~5 min — the status code that IS a rate limit, and what to do when you meet it."],
+    ["g","MDN — Retry-After header","https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Retry-After","Reference · ~5 min — both formats (seconds AND a date). Most people handle only one, then crash."],
+    ["y","AWS — timeouts, retries and backoff with jitter","https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/","Article · ~25 min — why jitter exists, from the people who run the biggest retry storms on Earth."]
+  ],
+  16: [],
+  17: [
+    ["g","Books to Scrape","https://books.toscrape.com/","Sandbox — your Stage 1 target: 1000 fake books that want to be scraped."],
+    ["g","Quotes to Scrape","https://quotes.toscrape.com/","Sandbox — your Stage 3 target: the infinite-scroll page with the endpoint behind it."],
+    ["g","Ollama — structured outputs","https://ollama.com/blog/structured-outputs","Article · ~10 min — the AI-rematch free lane: constrain a local model with a JSON schema. No account, no card."],
+    ["y","Gemini API — structured output","https://ai.google.dev/gemini-api/docs/structured-output","Docs · ~15 min — the other free lane for the bonus. Google account needed, no payment method."]
+  ]
+};
+const LVL = {g:["dg","Start here"], y:["dy","When comfortable"], r:["dr","Deep dive"]};
+const drawer = document.getElementById('resdrawer');
+function renderRes() {
+  const n = cur + 1;
+  const list = RES[n] || [];
+  document.getElementById('rescnt').textContent = list.length;
+  document.getElementById('restitle').textContent = n + " · " + slides[cur].nav;
+  const legend = '<div class="rleg"><span class="dot dg"></span>start here (everyone) &nbsp; <span class="dot dy"></span>when you’re comfortable &nbsp; <span class="dot dr"></span>optional deep dive<br>All free, no credit card. Links open in a new tab.</div>';
+  document.getElementById('resbody').innerHTML = legend + (list.length
+    ? list.map(r => '<a class="ritem" href="' + r[2] + '" target="_blank" rel="noopener"><div class="rt1"><span class="dot ' + LVL[r[0]][0] + '"></span>' + r[1] + '<span class="ext">↗</span></div><div class="rm">' + r[3] + "</div></a>").join("")
+    : '<div class="rempty">No extra reading for this one — just enjoy the slide.</div>');
+}
+document.getElementById('resbtn').onclick = () => { renderRes(); drawer.classList.toggle('open'); };
+document.getElementById('resclose').onclick = () => drawer.classList.remove('open');
+document.addEventListener('click', e => {
+  const rb = document.getElementById('resbtn');
+  if (drawer.classList.contains('open') && !drawer.contains(e.target) && e.target !== rb && !rb.contains(e.target)) drawer.classList.remove('open');
+});
+
+show(parseInt(location.hash.slice(1)) - 1 || 0);
+</script>
+</body>
+</html>
