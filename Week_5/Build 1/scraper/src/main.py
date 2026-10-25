@@ -1,6 +1,12 @@
+import json
+
+from pydantic import ValidationError
+
 from src import config
-from src.fetcher import Fetcher
-from src.parser import dedupe_urls, parse_catalogue
+from src.fetcher import Fetcher, fetched_at
+from src.models import Book
+from src.normalize import parse_price
+from src.parser import dedupe_urls, parse_book, parse_catalogue
 
 
 def discover(fetcher: Fetcher):
@@ -16,16 +22,33 @@ def discover(fetcher: Fetcher):
     return pages_seen, pairs
 
 
-if __name__ == "__main__":
+def main():
+    config.OUTPUT_DIR.mkdir(exist_ok=True)
     fetcher = Fetcher()
+
     pages_seen, pairs = discover(fetcher)
     unique = dedupe_urls(pairs)
     print(f"catalogue_pages={pages_seen} discovered={len(pairs)} unique_urls={len(unique)}")
 
-    from src.fetcher import fetched_at
-    from src.parser import parse_book
-    import json
+    books, errors = [], []
+    for url, source_page in unique:
+        content = fetcher.get(url)
+        raw = parse_book(content, url, source_page, fetched_at(url))
+        raw["price_gbp"] = parse_price(raw["price_text"])
+        try:
+            books.append(Book(**raw).model_dump())
+        except ValidationError as exc:
+            errors.append({"url": url, "reason": exc.errors(include_url=False, include_context=False)})
 
-    url, source = unique[0]
-    raw = parse_book(fetcher.get(url), url, source, fetched_at(url))
-    print(json.dumps(raw, indent=2, ensure_ascii=False))
+    books.sort(key=lambda b: b["product_url"])          # same order every run
+    (config.OUTPUT_DIR / "books.json").write_text(
+        json.dumps(books, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+    (config.OUTPUT_DIR / "errors.json").write_text(
+        json.dumps(errors, indent=2, ensure_ascii=False, default=str), encoding="utf-8"
+    )
+    print(f"detail_pages={len(unique)} valid={len(books)} invalid={len(errors)}")
+
+
+if __name__ == "__main__":
+    main()
